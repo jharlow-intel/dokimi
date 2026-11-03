@@ -575,7 +575,7 @@ def test_options_sharing_a_dest_stay_two_options():
 def test_help_and_unknown_options_are_still_reported():
     assert journeys.surface_problem(ROOT, "repo scan --no-such-flag") == "unknown flag: repo scan --no-such-flag"
     assert journeys.surface_problem(ROOT, "repo scan -h") is None
-    assert journeys.surface_problem(ROOT, "repo scan --fail-on") is None  # an unambiguous abbreviation
+    assert journeys.surface_problem(ROOT, "repo scan --fail-on-f") is None  # an unambiguous abbreviation
 
 
 # ------------------------------------------------------------------ verdict rules each mutation would break

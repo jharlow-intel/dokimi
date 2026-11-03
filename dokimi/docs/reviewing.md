@@ -127,6 +127,12 @@ add `also_scan: ["CONTRIBUTING.md"]` under `guidance`: `also_scan` names files t
 repository has and the gate must see, so a missing one makes the scan `incomplete`
 and `repo scan --fail-on-fail` exits 1.
 
+To gate a pull request on the guidance it adds or changes, scan the head against the
+base: `dokimi repo scan . --baseline origin/main --changed-only --fail-on-new`. It
+exits 1 only for a failing claim that is new in a guidance file the PR touched (or when
+the scan is incomplete where the base's was not), not for those the base already had.
+A moved claim stays existing: the match is on file, kind and claim text, not the line.
+
 The `id` must be lowercase: start with a letter or digit, then use only letters, digits, `.`, `_` and `-`.
 `reach` always adds the harness's own guidance file names (for example `CLAUDE.md`, `CLAUDE.local.md` or `AGENTS.md`).
 

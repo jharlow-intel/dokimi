@@ -10,9 +10,11 @@ import json
 import math
 import re
 import sys
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
+from dokimi.commands import repo_scan as scan
 from dokimi.exit_codes import EXIT_USAGE
 
 
@@ -34,27 +36,34 @@ def _write_json(path: str, payload: dict) -> None:
 
 def _source_tree(args: argparse.Namespace) -> tuple:
     """The source (source, tree): a malformed string, unpinned remote or pinned local path that is not the repository root is a usage error (2); a clone, fetch or pin resolution failure is 1."""
-    from dokimi.repos import RepoSource, SourceError, open_source
-    from dokimi.repos.source import SourceArgumentError
+    from dokimi.repos import RepoSource, SourceError
 
     try:
         source = RepoSource.parse(args.source)
     except SourceError as exc:
         print(f"✗ {exc}", file=sys.stderr)
         sys.exit(EXIT_USAGE)
+    return source, _open_tree(source, args)
+
+
+def _open_tree(source: Any, args: argparse.Namespace, label: str = "") -> Any:
+    """The tree of a parsed ``source``, exiting as `_source_tree` does; ``label`` prefixes each error."""
+    from dokimi.repos import SourceError, open_source
+    from dokimi.repos.source import SourceArgumentError
+
     # 2 = malformed source string, unpinned remote, pinned local path inside a repository, manifest/profile errors; 1 = clone/fetch/resolve of a pin
     # (incl. pinned local non-git source, pin absent locally, remote pin missing from origin).
     try:
-        return source, open_source(source, _cache_dir(args))
+        return open_source(source, _cache_dir(args))
     except SourceArgumentError as exc:  # a pinned local path that is not the repository root
-        print(f"✗ {exc}", file=sys.stderr)
+        print(f"✗ {label}{exc}", file=sys.stderr)
         sys.exit(EXIT_USAGE)
     except SourceError as exc:
-        print(f"✗ {exc}", file=sys.stderr)
+        print(f"✗ {label}{exc}", file=sys.stderr)
         sys.exit(1)
     except (OSError, ValueError) as exc:
         # A cache dir that cannot be made, or git output that is not UTF-8: a failed read, not a usage error.
-        print(f"✗ {exc}", file=sys.stderr)
+        print(f"✗ {label}{exc}", file=sys.stderr)
         sys.exit(1)
 
 
@@ -127,10 +136,14 @@ def cmd_repo_scan(args: argparse.Namespace) -> None:
     from dokimi.artifacts import save_artifact, stamp
     from dokimi.repos.l0 import scan_repo
 
-    _, tree = _source_tree(args)
+    scan.check_flags(args)
+    source, tree = _source_tree(args)
     manifest = _manifest_or_exit(tree, args, guidance_default=True, also_usage=(OSError,))
     static = _read_static(args.static) if args.static else None
     payload = scan_repo(tree, manifest, static)
+    if args.baseline:
+        base_tree = _open_tree(replace(source, rev=args.baseline), args, f"baseline {args.baseline}: ")
+        scan.attach(payload, tree, manifest, base_tree, args)
     if args.out:
         try:
             save_artifact("repo_readiness", payload, Path(args.out))
@@ -144,26 +157,11 @@ def cmd_repo_scan(args: argparse.Namespace) -> None:
     if args.json:
         print(json.dumps(stamp("repo_readiness", dict(payload)), indent=2))
     else:
-        c = payload["counts"]
-        detected = " (detected)" if payload["adapters_detected"] else ""
-        print(f"{manifest.id}: {len(payload['files'])} guidance files in {payload['repo']['tree']}; "
-              f"adapters: {', '.join(payload['adapters']) or 'none'}{detected}")
-        print(f"  claims: {c['total']} (ok {c['ok']}, unresolved {c['unresolved']}, fail {c['fail']})")
-        for warning in payload["warnings"]:
-            print(f"  warning: {warning}")
-        if payload["incomplete"]:
-            print(f"  incomplete: {'; '.join(payload['incomplete_reasons'])} (repo scan --fail-on-fail exits 1)")
-        if static_info is not None and not static_errors:
-            r = payload["by_source"]["repository"]
-            print(f"  repository static: {r['total']} claims, {r['fail']} fail; "
-                  f"{static_info['superseded']} framework claims replaced")
-        for claim in payload["claims"]:
-            if claim["status"].split("_", 1)[0] == "fail":
-                print(f"  FAIL {claim['file']}:{claim['line']} [{claim.get('kind')}] "
-                      f"{str(claim.get('claim'))[:90]} -- {claim.get('why')}")
+        scan.print_report(payload, manifest.id, static_info, static_errors)
         if args.out:
             print(f"wrote {args.out}")
     _scan_gate(payload, args.fail_on_fail)  # runs first: an invalid --static still gets the incomplete reason
+    scan.gate(payload, args.fail_on_new)
     if static_errors:
         sys.exit(1)
 
@@ -692,6 +690,14 @@ def register(sub, positive_int) -> None:
     scan_p.add_argument("--fail-on-fail", action="store_true", dest="fail_on_fail",
                         help="Exit 1 when any claim fails, an also_scan file is missing, a guidance file "
                         "or Bazel build input cannot be read, or no guidance file matched (for a CI gate)")
+    scan_p.add_argument("--baseline", default=None, metavar="REV",
+                        help="Also scan the same source at REV and mark each failing claim new or existing by "
+                        "file, kind and claim text (not line). Not with --static; a source's own @rev is replaced")
+    scan_p.add_argument("--changed-only", action="store_true", dest="changed_only",
+                        help="With --baseline: a failing claim is new only in a guidance file that REV lacks or differs")
+    scan_p.add_argument("--fail-on-new", action="store_true", dest="fail_on_new",
+                        help="With --baseline: exit 1 only for a new failing claim, or a scan incomplete "
+                        "where REV's was not")
     scan_p.add_argument("--cache-dir", default=None, dest="cache_dir", help=cache_help)
     scan_p.set_defaults(func=cmd_repo_scan)
 

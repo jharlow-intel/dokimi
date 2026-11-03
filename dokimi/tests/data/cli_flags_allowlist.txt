@@ -37,6 +37,7 @@
 --calls
 --candidate
 --catalog
+--changed-only  # repo scan: limit new failing claims to guidance files that differ from --baseline
 --checklist
 --claude  # catalog trigger-probe (#217) adds it: backend choice has no registry concept yet
 --command-template
@@ -62,6 +63,7 @@
 --fail-fast
 --fail-on-error
 --fail-on-fail
+--fail-on-new  # repo scan gate on new failing claims only; pairs with --baseline, no registry concept yet
 --fail-on-warning
 --file
 --fill-gaps

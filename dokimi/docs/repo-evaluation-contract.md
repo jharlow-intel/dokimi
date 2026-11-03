@@ -1522,6 +1522,41 @@ file-set parity check.
 Measured on oneDAL and scikit-learn-intelex, claim by claim against their own
 checkers: see the pull request that added the scan (#68).
 
+### Baseline scan (`--baseline`)
+
+`--baseline <rev>` also scans the same source at `<rev>`, with the manifest of the
+head, and marks each failing claim of the head `new` or existing (`new` is `true`
+or `false` on a failing claim; other claims have no `new`).
+
+- A failing claim is existing while the baseline has a failure with the same
+  `(file, kind, claim)` not yet matched; the line is never compared, so an edit
+  above a claim does not make it new. A second copy of a failing claim is new.
+  A claim that passed or was `unresolved` at the baseline, or that the baseline
+  lacks, is new.
+- The file is part of the key: a guidance file that is renamed or moved has
+  every failing claim in it new, and its old path's failures count as `fixed`.
+- A source pinned with `@<rev>` has that revision replaced; an unpinned directory
+  is the head as it is on disk. `--static` cannot be combined with it, as a
+  repository's claims belong to one tree.
+- `--changed-only` makes a failing claim new only in a guidance file whose text
+  differs from the baseline or that the baseline lacks (a renamed file counts), so
+  a PR gates the guidance files it touches. A file the head deleted is not in
+  `changed_files`. A claim that starts failing in an untouched file (its target was
+  deleted) is then existing.
+- `--fail-on-new` exits 1 when `new` is above 0 or `incomplete_new` is true, and
+  prints which on stderr. It does not replace `--fail-on-fail`, which still exits 1
+  on any failing claim. `--changed-only` does not scope `incomplete_new`.
+- Both flags, like `--static`, are a usage error (2) without `--baseline`, as is an
+  empty `<rev>`; an unknown `<rev>` exits 1.
+
+The report gains a `baseline` object (absent without the flag, and from reports
+written before it): `rev`, `sha`, `tree`, `new`, `existing`, `fixed` (baseline
+failures with no matching failure at the head), `incomplete` (the baseline scan),
+`incomplete_new` (the head scan has an `incomplete_reasons` entry the baseline's
+lacks) with those entries in `incomplete_new_reasons`, `changed_only` and
+`changed_files`. The text output adds a `baseline` line and prints `NEW FAIL` for a
+new claim.
+
 ### 8.1 Inspection (`repo_environment.v1`)
 
 `repo inspect <source>` reads the tree and, with `--index`, a code index of

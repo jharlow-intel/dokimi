@@ -68,6 +68,24 @@
     "warnings": {"type": "array", "items": {"type": "string"}, "description": "Guidance the manifest names but the tree lacks: a glob with no match, a missing also_scan file, no guidance at all."},
     "incomplete": {"type": "boolean", "description": "True when an also_scan file is missing, a guidance file or Bazel build input cannot be read, or no guidance file was scanned; `repo scan --fail-on-fail` then exits 1."},
     "incomplete_reasons": {"type": "array", "items": {"type": "string"}, "description": "The warnings that make the scan incomplete, as they appear in `warnings` and in its order; empty when the scan is complete. Absent from reports written before it was added."},
+    "baseline": {
+      "type": "object",
+      "description": "Present when `repo scan --baseline <rev>` also scanned the same source at <rev>. Absent from reports written before it was added and from a scan without --baseline.",
+      "required": ["rev", "sha", "tree", "changed_only", "changed_files", "new", "existing", "fixed", "incomplete", "incomplete_new", "incomplete_new_reasons"],
+      "properties": {
+        "rev": {"type": "string", "description": "The revision given to --baseline."},
+        "sha": {"type": ["string", "null"], "description": "Full commit SHA of the baseline."},
+        "tree": {"type": "string"},
+        "changed_only": {"type": "boolean", "description": "True with --changed-only: a failing claim is new only in a guidance file whose text differs from the baseline."},
+        "changed_files": {"type": ["array", "null"], "items": {"type": "string"}, "description": "With --changed-only, the scanned guidance files that differ from the baseline or that it lacks; null otherwise."},
+        "new": {"type": "integer", "minimum": 0, "description": "Failing claims marked `new`."},
+        "existing": {"type": "integer", "minimum": 0, "description": "Failing claims marked not `new`."},
+        "fixed": {"type": "integer", "minimum": 0, "description": "Failures of the baseline with no matching failure at the head, matched by (file, kind, claim) one for one."},
+        "incomplete": {"type": "boolean", "description": "Whether the baseline scan was incomplete."},
+        "incomplete_new": {"type": "boolean", "description": "True when `incomplete_new_reasons` is not empty; `--fail-on-new` then exits 1."},
+        "incomplete_new_reasons": {"type": "array", "items": {"type": "string"}, "description": "The head scan's `incomplete_reasons` that the baseline scan does not have."}
+      }
+    },
     "claims": {
       "type": "array",
       "items": {
@@ -80,6 +98,7 @@
           "source": {"enum": ["framework", "repository"]},
           "kind": {"description": "Claim kind, such as link, path, identifier, bazel_label or make_target."},
           "claim": {"description": "The text the guidance claims; a repository claim keeps whatever its static output wrote."},
+          "new": {"type": "boolean", "description": "Only on a failing claim of a scan with a baseline: true when the baseline does not fail on the same (file, kind, claim), never compared by line, and, with --changed-only, the file changed."},
           "why": {},
           "ctx": {}
         }

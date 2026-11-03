@@ -320,7 +320,9 @@ next release.
   conversions that turn a native review answer into a findings block.
 - `dokimi/repos/l0/` — `repo scan` (L0): checks the links, paths,
   identifiers, commands and build labels the guidance names against the same
-  tree (`repo_readiness.v1`), with no LLM call.
+  tree (`repo_readiness.v1`), with no LLM call; `l0/baseline.py` marks
+  failing claims new or existing against a baseline scan (`--baseline`), and
+  `dokimi/commands/repo_scan.py` holds the scan's text report and that CLI glue.
 - `dokimi/repos/environment/` — `repo inspect`: instruction files and their
   scope, check surfaces per project root, launch risks (hooks, MCP, risky
   scripts) and the file inventory (`repo_environment.v1`), read from the tree
